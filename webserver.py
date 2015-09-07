@@ -15,6 +15,7 @@ class Player:
         self.socket = socket
         self.pID = pID
         self.data = ""
+        self.score = 0
 
     def writeMsgID(self, msgID):
         self.writeSize(msgID)
@@ -37,6 +38,7 @@ class Player:
         return s
 
     def writeChars(self, chars, numChars):
+        chars = str(chars)
         while (len(chars) < numChars):
             chars = "0" + chars
         self.send(chars)
@@ -74,6 +76,13 @@ class Player:
             card = nextCard()
             self.writeMsgID(3)
             self.writeChars(card, 2)
+        elif msgID == 2:
+            self.score = int(self.readChars(2))
+            nextTurn()
+        elif msgID == 3:
+            self.score = 0
+            nextTurn()
+
 
     def canHandleMsg(self):
         msgID = self.peekMsgID()
@@ -85,11 +94,22 @@ class Player:
     def getMsgSize(self, msgID):
         if (msgID == 1):
             return 3
+        elif (msgID == 2):
+            return 5
+        elif (msgID == 3):
+            return 3
+        else:
+            print("No message size for msgID", msgID)
+        return 3
 
     def recv(self):
         data = bytearray(self.socket.recv(4096))
         if (len(data) == 0):
-            #print("Lost connection to client.")
+            return
+        self.parseData(data)
+        
+    def parseData(self, data):
+        if (len(data) < 1):
             return
         strData = ''
         datalen = (0x7f & data[1])
@@ -98,7 +118,9 @@ class Player:
             masked_data = data[6:(6+datalen)]
             unmasked_data = [masked_data[i] ^ mask_key[i%4] for i in range(len(masked_data))]
             strData = bytearray(unmasked_data).decode('utf-8')
-        self.data = self.data+strData
+        self.data = self.data + strData
+        self.parseData(data[6+datalen:])
+
 
 def handle(s):
     global pID
@@ -131,10 +153,11 @@ def handle(s):
     "").strip() + '\r\n\r\n', 'UTF-8'))
 
     sockets.append(s)
-    pID += 1
     player = Player(s, pID)
     player.writeMsgID(1)
+    player.writeChars(player.pID, 2)
     players.append(player)
+    pID += 1
 
 def main():
     global gameStarted
@@ -159,7 +182,7 @@ def main():
         for player in players:
             player.handle()
         if gameStarted == False:
-            if len(players) >= 1:
+            if len(players) >= 2:
                 gameStarted = True
                 random.shuffle(cards)
                 print("Starting game!")
@@ -170,8 +193,39 @@ def main():
                     player.writeChars(nextCard(), 2)
                     player.writeChars(nextCard(), 2)
                 stage = 1
-                print("Sent cards.")
+                nextTurn()
         sleep(0.01)
+
+def nextTurn():
+    global turn
+    turn += 1
+    if turn == len(players):
+        win()
+        return
+    print("It is player", turn, "'s turn")
+    for player in players:
+        if player.pID == turn:
+            player.writeMsgID(4)
+            break
+def win():
+    winners = []
+    for player in players:
+        if player.score < 2:
+            continue
+        if len(winners) == 0:
+            winners.append(player)
+        else:
+            if player.score > winners[0].score:
+                winners = [player]
+            elif player.score == winners[0].score:
+                winners.append(player)
+    print("These players won:")
+    for winner in winners:
+        print(winner.pID)
+    if len(winners) > 0:
+        for player in players:
+            player.writeMsgID(5)
+            player.writeChars(winners[0].pID, 2)
 
 def nextCard():
     global cardNum
@@ -188,7 +242,7 @@ cards = [   "2H", "3H", "4H", "5H", "6H", "7H", "8H", "9H", "0H", "JH", "QH", "K
             "2S", "3S", "4S", "5S", "6S", "7S", "8S", "9S", "0S", "JS", "QS", "KS", "AS",
             "2C", "3C", "4C", "5C", "6C", "7C", "8C", "9C", "0C", "JC", "QC", "KC", "AC"]
 cardNum = 0
-turn = 0
+turn = -1
 gameStarted = False
 stage = 0
 

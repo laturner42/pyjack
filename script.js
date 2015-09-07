@@ -2,6 +2,8 @@ var data = "";
 var ws;
 var cards = [];
 
+var total = 0;
+
 $(document).ready(function() {
  
     $("#hitme").hide();
@@ -17,7 +19,6 @@ $(document).ready(function() {
             ws.close();
         };
         ws.onopen = function() {
-            //ws.send($("#name").val());
         }
     } );
 
@@ -26,6 +27,8 @@ $(document).ready(function() {
     });
 
     $("#stay").click( function() {
+        writeMsgID(2);
+        writeChars(total, 2);
         $("#hitme").hide();
         $("#stay").hide();
     }); 
@@ -87,20 +90,29 @@ function handleNetwork() {
     }
     msgID = readMsgID();
     if (msgID === 1) {
+        var pID = parseInt(readChars(2));
+        $("#myname").text("You are player "+pID);
         $("#login").hide();
         $("#name").hide();
         $("#notify").text("Waiting to for game to start...");
     } else if (msgID === 2) {
         var card1 = readChars(2);
         var card2 = readChars(2);
-        $("#hitme").show();
-        $("#stay").show();
+        //$("#hitme").show();
+        //$("#stay").show();
         addCard(card1);
         addCard(card2);
         $("#notify").text("These are your cards.");
     } else if (msgID === 3) {
         var card = readChars(2);
         addCard(card);
+    } else if (msgID === 4) {
+        $("#notify").text("It is your turn!");
+        $("#hitme").show();
+        $("#stay").show();
+    } else if (msgID === 5) {
+        winner = String(parseInt(readChars(2)));
+        alert("Player "+winner+" won!");
     }
 }
 
@@ -133,6 +145,34 @@ function addCard(card) {
     }
     $("#cards").append($("<li>"+name+"</li>"));
     cards.push(card);
+
+    if (cards.length > 0 && total >= 0) {
+        total = 0;
+        for (var i=0; i<cards.length; i++) {
+            var val = cards[i].substring(0,1);
+            if (val == "0" || val=="J" || val=="Q" || val=="K") {
+                total += 10;
+            } else if (val == "A") {
+                total += 1;
+            } else {
+                total += parseInt(val);
+            }
+        }
+        if (total < 21) {
+            $("#notify").text("These are your cards. Total: "+String(total));
+        } else if (total == 21) {
+            $("#notify").text("You got 21!");
+            $("#hitme").hide();
+            $("#stay").hide();
+        } else {
+            total = -1;
+            $("#notify").text("You busted with "+String(total));
+            $("#hitme").hide();
+            $("#stay").hide();
+            writeMsgID(3);
+        }
+    }
+
 }
 
 function canHandleMsg() {
@@ -151,36 +191,18 @@ function getMsgSize(msgID) {
         return 3 + 4;
     } else if (msgID == 3) {
         return 3 + 2;
+    } else if (msgID == 4) {
+        return 3;
+    } else if (msgID == 5) {
+        return 5;
+    } else {
+        alert("Message ID "+String(msgID)+" does not exist.");
     }
     return 3;
 }
 
 function gameLoop() {
     handleNetwork();
-    if (cards.length > 0) {
-        var total = 0;
-        for (var i=0; i<cards.length; i++) {
-            var val = cards[i].substring(0,1);
-            if (val == "0" || val=="J" || val=="Q" || val=="K") {
-                total += 10;
-            } else if (val == "A") {
-                total += 1;
-            } else {
-                total += parseInt(val);
-            }
-        }
-        if (total < 21) {
-            $("#notify").text("These are your cards. Total: "+String(total));
-        } else if (total == 21) {
-            $("#notify").text("You got 21!");
-            $("#hitme").hide();
-            $("#stay").hide();
-        } else {
-            $("#notify").text("You busted with "+String(total));
-            $("#hitme").hide();
-            $("#stay").hide();
-        }
-    }
 }
 
 function httpGet(url, callback, carryout) {
