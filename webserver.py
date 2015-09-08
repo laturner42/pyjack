@@ -72,7 +72,9 @@ class Player:
         if (self.canHandleMsg() == False):
             return
         msgID = self.readMsgID()
-        if msgID == 1:
+        if msgID == 0:
+            startGame()
+        elif msgID == 1:
             card = nextCard()
             self.writeMsgID(3)
             self.writeChars(card, 2)
@@ -92,7 +94,9 @@ class Player:
         return False
 
     def getMsgSize(self, msgID):
-        if (msgID == 1):
+        if (msgID == 0):
+            return 3
+        elif (msgID == 1):
             return 3
         elif (msgID == 2):
             return 5
@@ -136,11 +140,13 @@ def handle(s):
     
     guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-    key = headers['Sec-WebSocket-Key'].rstrip()
-    key = bytes(key + guid, 'UTF-8')
-    key = hashlib.sha1(key).digest()
-    accept = base64.b64encode(key)
-    accept = accept.decode('UTF-8')
+    accept = ""
+    if "Sec-WebSocket-Key" in headers:
+        key = headers['Sec-WebSocket-Key'].rstrip()
+        key = bytes(key + guid, 'UTF-8')
+        key = hashlib.sha1(key).digest()
+        accept = base64.b64encode(key)
+        accept = accept.decode('UTF-8')
 
     s.send(bytes(("" +
     "HTTP/1.1 101 Web Socket Protocol Handshake\r\n" +
@@ -162,39 +168,54 @@ def handle(s):
 def main():
     global gameStarted
     global stage
-    server = socket.socket()
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(('', 8886))
-    server.listen(5)
-    #server.setblocking(0)
-    print("Listening...")
-    while True:
-        clientWaiting, _, _ = select.select([server], [], [], 0)
-        if (len(clientWaiting) > 0):
-            (clientsocket, address) = server.accept()
-            print("Accepted new client!")
-            handle(clientsocket)
-        clientsReady, _, _ = select.select(sockets, [], [], 0)
-        for client in clientsReady:
-            for player in players:
-                if player.socket == client:
-                    player.recv()
-        for player in players:
-            player.handle()
-        if gameStarted == False:
-            if len(players) >= 2:
-                gameStarted = True
-                random.shuffle(cards)
-                print("Starting game!")
-        else:
-            if (stage == 0):
+    try:
+        server = socket.socket()
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(('', 8886))
+        server.listen(5)
+        #server.setblocking(0)
+        print("Listening...")
+        while True:
+            clientWaiting, _, _ = select.select([server], [], [], 0)
+            if (len(clientWaiting) > 0):
+                (clientsocket, address) = server.accept()
+                print("Accepted new client!")
+                handle(clientsocket)
+            clientsReady, _, _ = select.select(sockets, [], [], 0)
+            for client in clientsReady:
                 for player in players:
-                    player.writeMsgID(2)
-                    player.writeChars(nextCard(), 2)
-                    player.writeChars(nextCard(), 2)
-                stage = 1
-                nextTurn()
-        sleep(0.01)
+                    if player.socket == client:
+                        player.recv()
+            for player in players:
+                player.handle()
+            if gameStarted:
+                if (stage == 0):
+                    for player in players:
+                        player.writeMsgID(2)
+                        player.writeChars(nextCard(), 2)
+                        player.writeChars(nextCard(), 2)
+                    stage = 1
+                    nextTurn()
+            sleep(0.01)
+    except KeyboardInterrupt:
+        print(' received, closing server.')
+        server.close()
+
+def startGame():
+    global gameStarted
+    global stage
+    global turn
+    global cardNum
+    if gameStarted:
+        return
+    if len(players) >= 1:
+        gameStarted = True
+        random.shuffle(cards)
+        print("Starting game!")
+        stage = 0
+        turn = -1
+        cardNum = 0
+
 
 def nextTurn():
     global turn
@@ -202,12 +223,12 @@ def nextTurn():
     if turn == len(players):
         win()
         return
-    print("It is player", turn, "'s turn")
     for player in players:
         if player.pID == turn:
             player.writeMsgID(4)
             break
 def win():
+    global gameStarted
     winners = []
     for player in players:
         if player.score < 2:
@@ -219,13 +240,13 @@ def win():
                 winners = [player]
             elif player.score == winners[0].score:
                 winners.append(player)
-    print("These players won:")
-    for winner in winners:
-        print(winner.pID)
-    if len(winners) > 0:
-        for player in players:
-            player.writeMsgID(5)
-            player.writeChars(winners[0].pID, 2)
+    for player in players:
+        player.writeMsgID(5)
+        if player in winners:
+            player.writeChars(1, 1)
+        else:
+            player.writeChars(0, 1)
+    gameStarted = False
 
 def nextCard():
     global cardNum
