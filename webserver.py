@@ -149,6 +149,7 @@ class Client:
                     self.pID = pID
                     print("Player has joined host", self.hostCode)
                     self.writeMsgID(1)
+                    sleep(1)
                     self.writeChars(self.pID, 2)
                     host.writeMsgID(1)
                     host.writeChars(self.pID, 2)

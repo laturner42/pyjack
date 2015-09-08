@@ -217,7 +217,7 @@ function canHandleMsg() {
 
 function getMsgSize(msgID) {
     if (msgID == 1) {
-        return 3;
+        return 3 + 2;
     } else if (msgID == 2) {
         return 3 + 4 + 2;
     } else if (msgID == 3) {
