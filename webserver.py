@@ -4,6 +4,7 @@ import base64
 import hashlib
 import select
 import random
+import tkinter
 from time import sleep
 from os import curdir, sep
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -16,6 +17,43 @@ class Player:
         self.pID = pID
         self.data = ""
         self.score = 0
+        self.cards = []
+        self.labelText = tkinter.StringVar()
+        self.label = tkinter.Label(window, textvariable=self.labelText, font=("Helvetica", 32))
+        self.label.pack()
+        self.labelText.set("Player " + str(self.pID))
+
+    def addCard(self, card):
+        self.cards.append(card)
+        self.tallyScore()
+
+    def tallyScore(self):
+        total = 0
+        for card in self.cards:
+            val = card[0]
+            if val == "0" or val == "J" or val == "Q" or val == "K":
+                total += 10
+            elif val == "A":
+                total += 11
+            elif val == "B":
+                total += 1
+            else:
+                total += int(val)
+        if total > 21:
+            found = False
+            for i in range(len(self.cards)): #card in self.cards:
+                if self.cards[i][0] == "A":
+                    found = True
+                    self.cards[i] = "B" + self.cards[i][1]
+                    break
+            if found:
+                self.tallyScore()
+                return
+        self.score = total
+        myCards = "??  "
+        for i in range(1, len(self.cards)):
+            myCards += self.cards[i] + "  "
+        self.labelText.set("Player " + str(self.pID) + " :  " + myCards)
 
     def writeMsgID(self, msgID):
         self.writeSize(msgID)
@@ -76,13 +114,17 @@ class Player:
             startGame()
         elif msgID == 1:
             card = nextCard()
+            self.addCard(card)
             self.writeMsgID(3)
             self.writeChars(card, 2)
+            self.writeChars(self.score, 2)
         elif msgID == 2:
             self.score = int(self.readChars(2))
+            self.label.config(fg='black')
             nextTurn()
         elif msgID == 3:
             self.score = 0
+            self.label.config(fg='red')
             nextTurn()
 
 
@@ -109,10 +151,14 @@ class Player:
     def recv(self):
         data = bytearray(self.socket.recv(4096))
         if (len(data) == 0):
+            print("Lost player.")
+            sockets.remove(self.socket)
+            players.remove(self)
             return
         self.parseData(data)
         
     def parseData(self, data):
+        global sockets
         if (len(data) < 1):
             return
         strData = ''
@@ -164,10 +210,12 @@ def handle(s):
     player.writeChars(player.pID, 2)
     players.append(player)
     pID += 1
+    return player
 
 def main():
     global gameStarted
     global stage
+    global window
     try:
         server = socket.socket()
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -175,12 +223,17 @@ def main():
         server.listen(5)
         #server.setblocking(0)
         print("Listening...")
+        window = tkinter.Tk()
+        window.geometry("640x480")
+        window.update()
+        lbl = tkinter.Label(window, text="Blackjack", font=("Helvetica", 64))
+        lbl.pack()
         while True:
             clientWaiting, _, _ = select.select([server], [], [], 0)
             if (len(clientWaiting) > 0):
                 (clientsocket, address) = server.accept()
                 print("Accepted new client!")
-                handle(clientsocket)
+                p = handle(clientsocket)
             clientsReady, _, _ = select.select(sockets, [], [], 0)
             for client in clientsReady:
                 for player in players:
@@ -192,10 +245,16 @@ def main():
                 if (stage == 0):
                     for player in players:
                         player.writeMsgID(2)
-                        player.writeChars(nextCard(), 2)
-                        player.writeChars(nextCard(), 2)
+                        card1 = nextCard()
+                        card2 = nextCard()
+                        player.addCard(card1)
+                        player.addCard(card2)
+                        player.writeChars(card1, 2)
+                        player.writeChars(card2, 2)
+                        player.writeChars(player.score, 2)
                     stage = 1
                     nextTurn()
+            window.update()
             sleep(0.01)
     except KeyboardInterrupt:
         print(' received, closing server.')
@@ -215,7 +274,10 @@ def startGame():
         stage = 0
         turn = -1
         cardNum = 0
-
+        for player in players:
+            player.label.config(fg='black')
+            player.cards = []
+            player.score = 0
 
 def nextTurn():
     global turn
@@ -225,8 +287,10 @@ def nextTurn():
         return
     for player in players:
         if player.pID == turn:
+            player.label.config(fg='blue')
             player.writeMsgID(4)
             break
+
 def win():
     global gameStarted
     winners = []
@@ -243,6 +307,7 @@ def win():
     for player in players:
         player.writeMsgID(5)
         if player in winners:
+            player.label.config(fg='green')
             player.writeChars(1, 1)
         else:
             player.writeChars(0, 1)

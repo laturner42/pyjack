@@ -102,7 +102,7 @@ function handleNetwork() {
         $("#login").hide();
         $("#name").hide();
         $("#start").show();
-        $("#notify").text("Waiting to for game to start...");
+        $("#notify").text("Waiting for players...");
     } else if (msgID === 2) {
         $("#start").hide();
         var card1 = readChars(2);
@@ -111,18 +111,18 @@ function handleNetwork() {
         cards = [];
         addCard(card1);
         addCard(card2);
-        total = 0;
-        tallyScore();
+        total = parseInt(readChars(2));
         $("#notify").text("These are your cards.");
     } else if (msgID === 3) {
         var card = readChars(2);
         addCard(card);
-        tallyScore();
+        total = parseInt(readChars(2));
+        parseScore();
     } else if (msgID === 4) {
         $("#notify").text("It is your turn!");
         $("#hitme").show();
         $("#stay").show();
-        tallyScore();
+        parseScore();
     } else if (msgID === 5) {
         winner = parseInt(readChars(1));
         if (winner == 1) {
@@ -165,45 +165,23 @@ function addCard(card) {
     cards.push(card);
 }
 
-function tallyScore() {
-    total = 0;
-    for (var i=0; i<cards.length; i++) {
-        var val = cards[i].substring(0,1);
-        if (val == "0" || val=="J" || val=="Q" || val=="K") {
-            total += 10;
-        } else if (val == "A") {
-            total += 11;
-        } else if (val == "B") {
-            total += 1;
-        } else {
-            total += parseInt(val);
-        }
+function parseScore() {
+    if (total < 0) {
+        return;
     }
+
     if (total < 21) {
         $("#notify").text("These are your cards. Total: "+String(total));
     } else if (total == 21) {
         $("#notify").text("You got 21!");
         $("#hitme").hide();
     } else {
-        var found = false;
-        for (var i=0; i<cards.length; i++) {
-            if (cards[i].substring(0,1) == "A") {
-                found = true;
-                cards[i] = "B" + cards[i].substring(1,2);
-                break;
-            }
-        }
-        if (found) {
-            tallyScore();
-            return;
-        }
         $("#notify").text("You busted with "+String(total));
         total = -1;
         $("#hitme").hide();
         $("#stay").hide();
         writeMsgID(3);
     }
-
 }
 
 function canHandleMsg() {
@@ -219,9 +197,9 @@ function getMsgSize(msgID) {
     if (msgID == 1) {
         return 3;
     } else if (msgID == 2) {
-        return 3 + 4;
+        return 3 + 4 + 2;
     } else if (msgID == 3) {
-        return 3 + 2;
+        return 3 + 2 + 2;
     } else if (msgID == 4) {
         return 3;
     } else if (msgID == 5) {
