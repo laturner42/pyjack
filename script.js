@@ -22,9 +22,12 @@ $(document).ready(function() {
         };
         ws.onopen = function() {
             var hostCode = $("#hostCode").val();
-            if (hostCode == "0000") {
+            if (hostCode == "0000" || hostCode.length != 4) {
                 alert("This is an invalid host code. Try again!");
             } else {
+                var name = $("#name").val();
+                writeMsgID(5);
+                writeString(name);
                 writeMsgID(10);
                 writeChars(hostCode, 4);
             }

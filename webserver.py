@@ -19,6 +19,7 @@ class Client:
         self.score = 0
         self.cards = []
         self.hostCode = ""
+        self.name = ""
 
     def addCard(self, card):
         self.cards.append(card)
@@ -55,6 +56,9 @@ class Client:
         return self.readSize()
 
     def peekMsgID(self):
+        return int(self.data[0:3])
+
+    def peekSize(self):
         return int(self.data[0:3])
 
     def writeSize(self, size):
@@ -108,17 +112,30 @@ class Client:
         if msgID == 0:
             startGame(self.hostCode)
         elif msgID == 1:
+            # Player hit
             card = nextCard(self.hostCode)
             self.addCard(card)
             self.writeMsgID(3)
             self.writeChars(card, 2)
             self.writeChars(self.score, 2)
+
+            h = findHost(self.hostCode)
+            h.writeMsgID(4)
+            h.writeChars(self.pID, 2)
+            h.writeChars(card, 2)
         elif msgID == 2:
+            # Player stayed
             self.score = int(self.readChars(2))
             nextTurn(self.hostCode)
         elif msgID == 3:
+            # Player busted
             self.score = 0
             nextTurn(self.hostCode)
+            h = findHost(self.hostCode)
+            h.writeMsgID(3)
+            h.writeChars(self.pID, 2)
+        elif msgID == 5:
+            self.name = self.readString()
         elif msgID == 10:
             code = self.readChars(4)
             if code == "0000":
@@ -135,6 +152,7 @@ class Client:
                     self.writeChars(self.pID, 2)
                     host.writeMsgID(1)
                     host.writeChars(self.pID, 2)
+                    host.writeString(self.name)
                 else:
                     self.writeMsgID(10)
                     self.writeMsgID(code)
@@ -170,6 +188,9 @@ class Client:
             return 5
         elif (msgID == 3):
             return 3
+        elif (msgID == 5):
+            s = int(self.data[3:6])
+            return 3 + 3 + s
         elif (msgID == 10):
             return 3 + 4
         else:
@@ -272,6 +293,7 @@ def main():
                 if host.gameStarted:
                     if (host.stage == 0):
                         for player in host.players:
+                            # Give each player their card
                             player.writeMsgID(2)
                             card1 = nextCard(host.hostCode)
                             card2 = nextCard(host.hostCode)
@@ -280,6 +302,11 @@ def main():
                             player.writeChars(card1, 2)
                             player.writeChars(card2, 2)
                             player.writeChars(player.score, 2)
+
+                            host.writeMsgID(2)
+                            host.writeChars(player.pID, 2)
+                            host.writeChars(card1, 2)
+                            host.writeChars(card2, 2)
                         host.stage = 1
                         nextTurn(host.hostCode)
             sleep(0.01)
@@ -308,7 +335,10 @@ def nextTurn(hostCode):
     if host.turn == len(host.players):
         win(hostCode)
         return
-    host.players[host.turn].writeMsgID(4)
+    p = host.players[host.turn]
+    p.writeMsgID(4)
+    host.writeMsgID(5)
+    host.writeChars(p.pID, 2)
 
 def findHost(hostCode):
     for h in hosts:
@@ -333,6 +363,8 @@ def win(hostCode):
         player.writeMsgID(5)
         if player in winners:
             player.writeChars(1, 1)
+            host.writeMsgID(6)
+            host.writeChars(player.pID, 2)
         else:
             player.writeChars(0, 1)
     host.gameStarted = False
