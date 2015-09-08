@@ -1,12 +1,14 @@
 body {
 	background-color: #333;
 	color: #BBB;
-    width: 300px;
-    height: 500px;
 }
 
 .block {
 	width: 40px;
 	height: 40px;
 	border: 1px solid red;
+}
+
+input {
+    width: 100%;
 }

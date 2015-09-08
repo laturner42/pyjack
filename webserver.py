@@ -4,7 +4,6 @@ import base64
 import hashlib
 import select
 import random
-import tkinter
 from time import sleep
 from os import curdir, sep
 from http.server import BaseHTTPRequestHandler, HTTPServer
