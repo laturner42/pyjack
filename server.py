@@ -39,7 +39,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
 def main():
     try:
-        server = HTTPServer(('', 80), MyHandler)
+        server = HTTPServer(('', 8001), MyHandler)
         print("Starting webpage server...")
         server.serve_forever()
     except KeyboardInterrupt:
