@@ -3,11 +3,13 @@ import json
 from os import curdir, sep
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+files = ["/lib/jquery-1.11.3.js", "/script.js", "/index.html", "/style.css"]
+
 class MyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            if self.path == '/':
+            if self.path == '/' or self.path not in files:
                 self.path = "/index.html"
             f = open(curdir + sep + self.path)
             out = f.read()
