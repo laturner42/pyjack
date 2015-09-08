@@ -21,8 +21,21 @@ $(document).ready(function() {
             ws.close();
         };
         ws.onopen = function() {
+            var hostCode = $("#hostCode").val();
+            if (hostCode == "0000") {
+                alert("This is an invalid host code. Try again!");
+            } else {
+                writeMsgID(10);
+                writeChars(hostCode, 4);
+            }
         }
+
+        $("#host").hide();
     } );
+
+    $("#host").click( function() {
+        window.location.href = '/host.html';
+    });
 
     $("#start").click( function() {
         writeMsgID(0);
@@ -101,6 +114,9 @@ function handleNetwork() {
         $("#myname").text("You are player "+pID);
         $("#login").hide();
         $("#name").hide();
+        $("#myhost").hide();
+        $("#hostCode").hide();
+
         $("#start").show();
         $("#notify").text("Waiting for players...");
     } else if (msgID === 2) {
@@ -131,6 +147,9 @@ function handleNetwork() {
             $("#notify").text("You lost...");
         }
         $("#start").show();
+    } else if (msgID === 10) {
+        code = readChars(4);
+        alert("Host code " + String(code) + " is invalid.");
     }
 }
 
@@ -204,6 +223,8 @@ function getMsgSize(msgID) {
         return 3;
     } else if (msgID == 5) {
         return 4;
+    } else if (msgID == 10) {
+        return 3 + 4;
     } else {
         alert("Message ID "+String(msgID)+" does not exist.");
     }

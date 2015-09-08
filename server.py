@@ -9,7 +9,7 @@ class MyHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
-            if self.path == '/' or self.path not in files:
+            if self.path == '/': # or self.path not in files:
                 self.path = "/index.html"
             f = open(curdir + sep + self.path)
             out = f.read()

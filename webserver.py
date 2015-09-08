@@ -9,7 +9,7 @@ from time import sleep
 from os import curdir, sep
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-class Player:
+class Client:
 
     def __init__(self, socket, pID):
         print("Created player")
@@ -18,10 +18,7 @@ class Player:
         self.data = ""
         self.score = 0
         self.cards = []
-        self.labelText = tkinter.StringVar()
-        self.label = tkinter.Label(window, textvariable=self.labelText, font=("Helvetica", 32))
-        self.label.pack()
-        self.labelText.set("Player " + str(self.pID))
+        self.hostCode = ""
 
     def addCard(self, card):
         self.cards.append(card)
@@ -50,10 +47,6 @@ class Player:
                 self.tallyScore()
                 return
         self.score = total
-        myCards = "??  "
-        for i in range(1, len(self.cards)):
-            myCards += self.cards[i] + "  "
-        self.labelText.set("Player " + str(self.pID) + " :  " + myCards)
 
     def writeMsgID(self, msgID):
         self.writeSize(msgID)
@@ -105,28 +98,61 @@ class Player:
         self.socket.send(ret)
 
     def handle(self):
+        global pID
+        global hosts
         if len(self.data) < 3:
             return
         if (self.canHandleMsg() == False):
             return
         msgID = self.readMsgID()
         if msgID == 0:
-            startGame()
+            startGame(self.hostCode)
         elif msgID == 1:
-            card = nextCard()
+            card = nextCard(self.hostCode)
             self.addCard(card)
             self.writeMsgID(3)
             self.writeChars(card, 2)
             self.writeChars(self.score, 2)
         elif msgID == 2:
             self.score = int(self.readChars(2))
-            self.label.config(fg='black')
-            nextTurn()
+            nextTurn(self.hostCode)
         elif msgID == 3:
             self.score = 0
-            self.label.config(fg='red')
-            nextTurn()
-
+            nextTurn(self.hostCode)
+        elif msgID == 10:
+            code = self.readChars(4)
+            if code == "0000":
+                self.becomeHost()
+            else:
+                host = findHost(code)
+                if host:
+                    host.players.append(self)
+                    self.hostCode = host.hostCode
+                    pID += 1
+                    self.pID = pID
+                    print("Player has joined host", self.hostCode)
+                    self.writeMsgID(1)
+                    self.writeChars(self.pID, 2)
+                    host.writeMsgID(1)
+                    host.writeChars(self.pID, 2)
+                else:
+                    self.writeMsgID(10)
+                    self.writeMsgID(code)
+    
+    def becomeHost(self):
+        global hosts
+        global cards
+        self.hostCode = generateHostCode()
+        self.players = []
+        self.cards = cards[:]
+        self.turn = -1
+        self.cardNum = 0
+        self.stage = 0
+        hosts.append(self)
+        self.gameStarted = False
+        print("New host with host code", self.hostCode)
+        self.writeMsgID(10)
+        self.writeChars(self.hostCode, 4)
 
     def canHandleMsg(self):
         msgID = self.peekMsgID()
@@ -144,6 +170,8 @@ class Player:
             return 5
         elif (msgID == 3):
             return 3
+        elif (msgID == 10):
+            return 3 + 4
         else:
             print("No message size for msgID", msgID)
         return 3
@@ -151,9 +179,9 @@ class Player:
     def recv(self):
         data = bytearray(self.socket.recv(4096))
         if (len(data) == 0):
-            print("Lost player.")
+            print("Lost client.")
             sockets.remove(self.socket)
-            players.remove(self)
+            clients.remove(self)
             return
         self.parseData(data)
         
@@ -171,6 +199,13 @@ class Player:
         self.data = self.data + strData
         self.parseData(data[6+datalen:])
 
+def generateHostCode():
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    code = chars[int(random.random()*26)] + chars[int(random.random()*26)] + chars[int(random.random()*26)] + chars[int(random.random()*26)]
+    for host in hosts:
+        if host.hostCode == code:
+            return generateHostCode()
+    return code
 
 def handle(s):
     global pID
@@ -205,12 +240,9 @@ def handle(s):
     "").strip() + '\r\n\r\n', 'UTF-8'))
 
     sockets.append(s)
-    player = Player(s, pID)
-    player.writeMsgID(1)
-    player.writeChars(player.pID, 2)
-    players.append(player)
-    pID += 1
-    return player
+    client = Client(s, pID)
+    clients.append(client)
+    return client
 
 def main():
     global gameStarted
@@ -223,78 +255,71 @@ def main():
         server.listen(5)
         #server.setblocking(0)
         print("Listening...")
-        window = tkinter.Tk()
-        window.geometry("640x480")
-        window.update()
-        lbl = tkinter.Label(window, text="Blackjack", font=("Helvetica", 64))
-        lbl.pack()
         while True:
             clientWaiting, _, _ = select.select([server], [], [], 0)
             if (len(clientWaiting) > 0):
                 (clientsocket, address) = server.accept()
                 print("Accepted new client!")
-                p = handle(clientsocket)
+                handle(clientsocket)
             clientsReady, _, _ = select.select(sockets, [], [], 0)
             for client in clientsReady:
-                for player in players:
-                    if player.socket == client:
-                        player.recv()
-            for player in players:
-                player.handle()
-            if gameStarted:
-                if (stage == 0):
-                    for player in players:
-                        player.writeMsgID(2)
-                        card1 = nextCard()
-                        card2 = nextCard()
-                        player.addCard(card1)
-                        player.addCard(card2)
-                        player.writeChars(card1, 2)
-                        player.writeChars(card2, 2)
-                        player.writeChars(player.score, 2)
-                    stage = 1
-                    nextTurn()
-            window.update()
+                for c in clients:
+                    if c.socket == client:
+                        c.recv()
+            for client in clients:
+                client.handle()
+            for host in hosts:
+                if host.gameStarted:
+                    if (host.stage == 0):
+                        for player in host.players:
+                            player.writeMsgID(2)
+                            card1 = nextCard(host.hostCode)
+                            card2 = nextCard(host.hostCode)
+                            player.addCard(card1)
+                            player.addCard(card2)
+                            player.writeChars(card1, 2)
+                            player.writeChars(card2, 2)
+                            player.writeChars(player.score, 2)
+                        host.stage = 1
+                        nextTurn(host.hostCode)
             sleep(0.01)
     except KeyboardInterrupt:
         print(' received, closing server.')
         server.close()
 
-def startGame():
-    global gameStarted
-    global stage
-    global turn
-    global cardNum
-    if gameStarted:
+def startGame(hostCode):
+    host = findHost(hostCode)
+    if host.gameStarted:
         return
-    if len(players) >= 1:
-        gameStarted = True
-        random.shuffle(cards)
+    if len(host.players) >= 1:
+        host.gameStarted = True
+        random.shuffle(host.cards)
         print("Starting game!")
-        stage = 0
-        turn = -1
-        cardNum = 0
-        for player in players:
-            player.label.config(fg='black')
+        host.stage = 0
+        host.turn = -1
+        host.cardNum = 0
+        for player in host.players:
             player.cards = []
             player.score = 0
 
-def nextTurn():
-    global turn
-    turn += 1
-    if turn == len(players):
-        win()
+def nextTurn(hostCode):
+    host = findHost(hostCode)
+    host.turn += 1
+    if host.turn == len(host.players):
+        win(hostCode)
         return
-    for player in players:
-        if player.pID == turn:
-            player.label.config(fg='blue')
-            player.writeMsgID(4)
-            break
+    host.players[host.turn].writeMsgID(4)
 
-def win():
-    global gameStarted
+def findHost(hostCode):
+    for h in hosts:
+        if h.hostCode == hostCode:
+            return h
+    return False
+
+def win(hostCode):
+    host = findHost(hostCode)
     winners = []
-    for player in players:
+    for player in host.players:
         if player.score < 2:
             continue
         if len(winners) == 0:
@@ -304,33 +329,29 @@ def win():
                 winners = [player]
             elif player.score == winners[0].score:
                 winners.append(player)
-    for player in players:
+    for player in host.players:
         player.writeMsgID(5)
         if player in winners:
-            player.label.config(fg='green')
             player.writeChars(1, 1)
         else:
             player.writeChars(0, 1)
-    gameStarted = False
+    host.gameStarted = False
 
-def nextCard():
-    global cardNum
-    card = cards[cardNum]
-    cardNum += 1
+def nextCard(hostNum):
+    host = findHost(hostNum)
+    card = host.cards[host.cardNum]
+    host.cardNum += 1
     return card
 
 sockets = []
-players = []
+clients = []
+hosts = []
 pID = 0
 
 cards = [   "2H", "3H", "4H", "5H", "6H", "7H", "8H", "9H", "0H", "JH", "QH", "KH", "AH",
             "2D", "3D", "4D", "5D", "6D", "7D", "8D", "9D", "0D", "JD", "QD", "KD", "AD",
             "2S", "3S", "4S", "5S", "6S", "7S", "8S", "9S", "0S", "JS", "QS", "KS", "AS",
             "2C", "3C", "4C", "5C", "6C", "7C", "8C", "9C", "0C", "JC", "QC", "KC", "AC"]
-cardNum = 0
-turn = -1
-gameStarted = False
-stage = 0
 
 if __name__ == '__main__':
     main()
