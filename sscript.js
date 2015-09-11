@@ -22,7 +22,7 @@ function connect() {
     };
 
     ws.onopen = function() {
-        $("#hostCode").text("Waiting on host code...");
+        $("#myHostCode").text("Waiting on host code...");
         writeMsgID(10);
         writeChars("0000", 4);
     }
@@ -143,9 +143,10 @@ function handleNetwork() {
         }
         var pID = parseInt(readChars(2));
         findPlayer(pID).label.css("color", "green");
+        renderCards(true);
     } else if (msgID === 10) {
         hostCode = readChars(4);
-        $("#hostCode").text("Host code: "+hostCode);
+        $("#myHostCode").text("Host code: "+hostCode);
     }
 }
 
@@ -171,14 +172,14 @@ function getMsgSize(msgID) {
     return 3;
 }
 
-function renderCards() {
+function renderCards(show) {
     for (var p=0; p<players.length; p++) {
         var player = players[p];
         var t = player.name;
         if (player.cards.length > 0) {
             t += " :  ";
             for (var c=0; c<player.cards.length; c++) {
-                if (c > 0) {
+                if (c > 0 || show) {
                     var card = player.cards[c];
                     t += card + "  ";
                 } else {

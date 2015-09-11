@@ -11,6 +11,8 @@ class MyHandler(BaseHTTPRequestHandler):
         try:
             if self.path == '/': # or self.path not in files:
                 self.path = "/index.html"
+            if self.path == '/host':
+                self.path = "/host.html"
             f = open(curdir + sep + self.path)
             out = f.read()
             ext = self.path.split('.')

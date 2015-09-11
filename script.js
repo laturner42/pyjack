@@ -11,6 +11,10 @@ $(document).ready(function() {
 
     $("#start").hide();
 
+    $("#hostCode").on('input',  function() {
+        $("#hostCode").val($("#hostCode").val().toUpperCase());
+    });
+
     $("#login").click( function() {
         ws = new WebSocket("ws://localhost:8886");
         ws.onmessage = function (event) {
@@ -21,7 +25,7 @@ $(document).ready(function() {
             ws.close();
         };
         ws.onopen = function() {
-            var hostCode = $("#hostCode").val();
+            var hostCode = $("#hostCode").val().toUpperCase();
             if (hostCode == "0000" || hostCode.length != 4) {
                 alert("This is an invalid host code. Try again!");
             } else {
@@ -160,30 +164,35 @@ function addCard(card) {
     val = card.substring(0,1);
     suit = card.substring(1,2);
     name = "";
+    color = "black";
     if (val == "0") {
         name += "10";
     } else if (val == "J") {
-        name += "Jack";
+        name += "J";
     } else if (val == "Q") {
-        name += "Queen";
+        name += "Q";
     } else if (val == "K") {
-        name += "King";
+        name += "K";
     } else if (val == "A") {
-        name += "Ace";
+        name += "A";
     } else {
         name += String(val);
     }
-    name += " of ";
+    name += "</br>";
     if (suit == "H") {
-        name += "Hearts";
+        name += "&#9829;";
+        color = "red";
     } else if (suit == "S") {
-        name += "Spades";
+        name += "&#9824;";
     } else if (suit == "C") {
-        name += "Clubs";
+        name += "&#9827;";
     } else if (suit == "D") {
-        name += "Diamonds";
+        name += "&#9830;";
+        color = "red";
     }
-    $("#cards").append($("<li>"+name+"</li>"));
+    var newCard = $("<li><div class='card'>"+name+"</div></li>");
+    newCard.css("color", color);
+    $("#cards").append(newCard);
     cards.push(card);
 }
 

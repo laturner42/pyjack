@@ -222,7 +222,7 @@ class Client:
 
 def generateHostCode():
     chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    code = chars[int(random.random()*26)] + chars[int(random.random()*26)] + chars[int(random.random()*26)] + chars[int(random.random()*26)]
+    code = ''.join(chars[int(random.random()*26)] for _ in range(4))
     for host in hosts:
         if host.hostCode == code:
             return generateHostCode()
