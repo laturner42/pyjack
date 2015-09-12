@@ -16,7 +16,7 @@ $(document).ready(function() {
     });
 
     $("#login").click( function() {
-        ws = new WebSocket("ws://localhost:8886");
+        ws = new WebSocket("ws://preston.room409.xyz:8886");
         ws.onmessage = function (event) {
             data = data + event.data;
         }
@@ -118,7 +118,7 @@ function handleNetwork() {
     msgID = readMsgID();
     if (msgID === 1) {
         var pID = parseInt(readChars(2));
-        $("#myname").text("You are player "+pID);
+        $("#myname").text("");
         $("#login").hide();
         $("#name").hide();
         $("#myhost").hide();

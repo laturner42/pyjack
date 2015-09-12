@@ -11,7 +11,7 @@ $(document).ready(function() {
 });
 
 function connect() {
-    ws = new WebSocket("ws://localhost:8886");
+    ws = new WebSocket("ws://preston.room409.xyz:8886");
     ws.onmessage = function(event) {
         data = data + event.data;
     };
@@ -92,12 +92,22 @@ function handleNetwork() {
     if (msgID === 1) {
         var pID = parseInt(readChars(2));
         var name = readString();
+        for (var i=0; i<players.length; i++) {
+            if (players[i].pID == pID) {
+                players[i].connected = true;
+                players[i].label.css("color", "#AAA");
+                renderCards();
+                return
+            }
+        }
         var newPlayer = {};
         newPlayer.pID = pID;
         newPlayer.cards = [];
         newPlayer.myTurn = false;
         newPlayer.name = name;
+        newPlayer.connected = true;
         lbl = $("<li>Player "+String(pID)+"</li>");
+        lbl.css("color", "#AAA");
         newPlayer.label = lbl;
         $("#players").append(lbl);
         players.push(newPlayer);
@@ -144,6 +154,17 @@ function handleNetwork() {
         var pID = parseInt(readChars(2));
         findPlayer(pID).label.css("color", "green");
         renderCards(true);
+    } else if (msgID === 7) {
+        var pID = parseInt(readChars(2));
+        for (var i=0; i<players.length; i++) {
+            if (players[i].pID === pID) {
+                players[i].connected = false;
+                players[i].label.text(players[i].name+" disconnected.");
+                players[i].label.css("color", "yellow");
+                players[i].myTurn = false;
+                players[i].cards = [];
+            }
+        }
     } else if (msgID === 10) {
         hostCode = readChars(4);
         $("#myHostCode").text("Host code: "+hostCode);
@@ -166,6 +187,8 @@ function getMsgSize(msgID) {
         return 3 + 2;
     } else if (msgID == 6) {
         return 3 + 2;
+    } else if (msgID == 7) {
+        return 3 + 2;
     } else {
         alert("Message ID "+String(msgID)+" does not exist.");
     }
@@ -175,6 +198,9 @@ function getMsgSize(msgID) {
 function renderCards(show) {
     for (var p=0; p<players.length; p++) {
         var player = players[p];
+        if (!player.connected) {
+            continue;
+        }
         var t = player.name;
         if (player.cards.length > 0) {
             t += " :  ";

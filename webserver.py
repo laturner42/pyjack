@@ -19,6 +19,8 @@ class Client:
         self.cards = []
         self.hostCode = ""
         self.name = ""
+        self.playing = False
+        self.myTurn = False
 
     def addCard(self, card):
         self.cards.append(card)
@@ -142,20 +144,34 @@ class Client:
             else:
                 host = findHost(code)
                 if host:
+                    for player in host.players:
+                        if player.socket == None:
+                            if player.name.upper() == self.name.upper():
+                                print("Player has reconnected.")
+                                player.socket = self.socket
+                                clients.append(player)
+                                clients.remove(self)
+                                self.socket = None
+                                player.confirm()
+                                return
+
                     host.players.append(self)
                     self.hostCode = host.hostCode
                     pID += 1
                     self.pID = pID
                     print("Player has joined host", self.hostCode)
-                    self.writeMsgID(1)
-                    sleep(1)
-                    self.writeChars(self.pID, 2)
-                    host.writeMsgID(1)
-                    host.writeChars(self.pID, 2)
-                    host.writeString(self.name)
+                    self.confirm()
                 else:
                     self.writeMsgID(10)
                     self.writeMsgID(code)
+    
+    def confirm(self):
+        host = findHost(self.hostCode)
+        self.writeMsgID(1)
+        self.writeChars(self.pID, 2)
+        host.writeMsgID(1)
+        host.writeChars(self.pID, 2)
+        host.writeString(self.name)
     
     def becomeHost(self):
         global hosts
@@ -201,8 +217,15 @@ class Client:
         data = bytearray(self.socket.recv(4096))
         if (len(data) == 0):
             print("Lost client.")
+            host = findHost(self.hostCode)
+            host.writeMsgID(7)
+            host.writeChars(self.pID, 2)
             sockets.remove(self.socket)
             clients.remove(self)
+            self.playing = False
+            self.socket = None
+            if self.myTurn:
+                nextTurn(self.hostCode)
             return
         self.parseData(data)
         
@@ -293,6 +316,8 @@ def main():
                 if host.gameStarted:
                     if (host.stage == 0):
                         for player in host.players:
+                            if player.playing != True:
+                                continue
                             # Give each player their card
                             player.writeMsgID(2)
                             card1 = nextCard(host.hostCode)
@@ -319,6 +344,7 @@ def startGame(hostCode):
     if host.gameStarted:
         return
     if len(host.players) >= 1:
+        host.players.append(host.players.pop(0))
         host.gameStarted = True
         random.shuffle(host.cards)
         print("Starting game!")
@@ -326,19 +352,27 @@ def startGame(hostCode):
         host.turn = -1
         host.cardNum = 0
         for player in host.players:
+            if player.socket:
+                player.playing = True
             player.cards = []
             player.score = 0
 
 def nextTurn(hostCode):
     host = findHost(hostCode)
     host.turn += 1
+    for p in host.players:
+        p.myTurn = False
     if host.turn == len(host.players):
         win(hostCode)
         return
     p = host.players[host.turn]
-    p.writeMsgID(4)
-    host.writeMsgID(5)
-    host.writeChars(p.pID, 2)
+    if p.playing:
+        p.myTurn = True
+        p.writeMsgID(4)
+        host.writeMsgID(5)
+        host.writeChars(p.pID, 2)
+    else:
+        nextTurn(hostCode)
 
 def findHost(hostCode):
     for h in hosts:
@@ -360,6 +394,8 @@ def win(hostCode):
             elif player.score == winners[0].score:
                 winners.append(player)
     for player in host.players:
+        if player.playing != True:
+            continue
         player.writeMsgID(5)
         if player in winners:
             player.writeChars(1, 1)
