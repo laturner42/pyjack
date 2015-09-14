@@ -1,4 +1,3 @@
-var data = "";
 var ws;
 var cards = [];
 
@@ -6,6 +5,8 @@ var total = 0;
 
 $(document).ready(function() {
  
+    setupMessages();
+
     $("#hitme").hide();
     $("#stay").hide();
 
@@ -16,26 +17,32 @@ $(document).ready(function() {
     });
 
     $("#login").click( function() {
-        ws = new WebSocket("ws://preston.room409.xyz:8886");
-        ws.onmessage = function (event) {
-            data = data + event.data;
-        }
-        window.onbeforeunload = function() {
-            ws.onclose = function () {}; // disable onclose handler first
-            ws.close();
-        };
-        ws.onopen = function() {
+        var onopen = function() {
             var hostCode = $("#hostCode").val().toUpperCase();
             if (hostCode == "0000" || hostCode.length != 4) {
                 alert("This is an invalid host code. Try again!");
             } else {
                 var name = $("#name").val();
+                var packet = newPacket(5);
+                packet.write(name);
+                packet.send();
+                packet = newPacket(10);
+                packet.write(hostCode);
+                packet.send();
+                /*
                 writeMsgID(5);
                 writeString(name);
                 writeMsgID(10);
                 writeChars(hostCode, 4);
+                */
             }
         }
+
+        var onclose = function() {
+            alert("Lost connection.");
+        }
+
+        wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);
 
         $("#host").hide();
     } );
@@ -45,16 +52,21 @@ $(document).ready(function() {
     });
 
     $("#start").click( function() {
-        writeMsgID(0);
+        newPacket(0).send();
+        //writeMsgID(0);
     });
 
     $("#hitme").click( function() {
-        writeMsgID(1);
+        newPacket(1).send();
+        //writeMsgID(1);
     });
 
     $("#stay").click( function() {
-        writeMsgID(2);
-        writeChars(total, 2);
+        //writeMsgID(2);
+        //writeChars(total, 2);
+        var packet = newPacket(2);
+        packet.write(total);
+        packet.send();
         $("#hitme").hide();
         $("#stay").hide();
         $("#notify").text("You stayed with a score of " + String(total));
@@ -63,61 +75,51 @@ $(document).ready(function() {
     setInterval(gameLoop, 15);
 });
 
-function readChars(k) {
-    d = data.substring(0, k);
-    data = data.substring(k);
-    return d;
-}
+function setupMessages() {
+    var m1 = createMsgStruct(1, false);
+    m1.addChars(2);
 
-function readMsgID() {
-    return readSize();
-}
+    var m2 = createMsgStruct(2, false);
+    m2.addChars(2);
+    m2.addChars(2);
+    m2.addChars(2);
 
-function readSize() {
-    d = parseInt(data.substring(0, 3));
-    data = data.substring(3);
-    return d;
-}
+    var m3 = createMsgStruct(3, false);
+    m3.addChars(2);
+    m3.addChars(2);
 
-function writeMsgID(msgID) {
-    writeSize(msgID);
-}
+    var m4 = createMsgStruct(4, false);
+    
+    var m5 = createMsgStruct(5, false);
+    m5.addChars(1);
 
-function writeSize(num) {
-    s = String(num);
-    while (s.length < 3) {
-        s = "0"+s;
-    }
-    ws.send(s);
-}
+    var m10 = createMsgStruct(10, false);
+    m10.addChars(4);
 
-function writeChars(chars, numChars) {
-    s = String(chars);
-    while (s.length < numChars) {
-        s = "0"+s;
-    }
-    ws.send(s);
-}
+    var o0 = createMsgStruct(0, true);
 
-function writeString(string) {
-    writeSize(string.length);
-    ws.send(string);
-}
+    var o1 = createMsgStruct(1, true);
 
-function peekSize() {
-    return parseInt(data.substring(0, 3));
+    var o2 = createMsgStruct(2, true);
+    o2.addChars(2);
+
+    var o3 = createMsgStruct(3, true);
+
+    var o5 = createMsgStruct(5, true);
+    o5.addString();
+
+    var o10 = createMsgStruct(10, true);
+    o10.addChars(4);
 }
 
 function handleNetwork() {
-    if (data.length < 3) {
-        return;
-    }
     if (!canHandleMsg()) {
         return;
     }
-    msgID = readMsgID();
+    var packet = readPacket();
+    msgID = packet.msgID;
     if (msgID === 1) {
-        var pID = parseInt(readChars(2));
+        var pID = parseInt(packet.read());
         $("#myname").text("");
         $("#login").hide();
         $("#name").hide();
@@ -128,18 +130,18 @@ function handleNetwork() {
         $("#notify").text("Waiting for players...");
     } else if (msgID === 2) {
         $("#start").hide();
-        var card1 = readChars(2);
-        var card2 = readChars(2);
+        var card1 = packet.read(); //readChars(2);
+        var card2 = packet.read(); //readChars(2);
         $("#cards").empty();
         cards = [];
         addCard(card1);
         addCard(card2);
-        total = parseInt(readChars(2));
+        total = packet.readInt(); //parseInt(readChars(2));
         $("#notify").text("These are your cards.");
     } else if (msgID === 3) {
-        var card = readChars(2);
+        var card = packet.read(); //readChars(2);
         addCard(card);
-        total = parseInt(readChars(2));
+        total = packet.readInt(); //readChars(2));
         parseScore();
     } else if (msgID === 4) {
         $("#notify").text("It is your turn!");
@@ -147,7 +149,7 @@ function handleNetwork() {
         $("#stay").show();
         parseScore();
     } else if (msgID === 5) {
-        winner = parseInt(readChars(1));
+        winner = packet.readInt(); //parseInt(readChars(1));
         if (winner == 1) {
             $("#notify").text("You won!");
         } else {
@@ -155,7 +157,7 @@ function handleNetwork() {
         }
         $("#start").show();
     } else if (msgID === 10) {
-        code = readChars(4);
+        code = packet.read(); //readChars(4);
         alert("Host code " + String(code) + " is invalid.");
     }
 }
@@ -211,36 +213,8 @@ function parseScore() {
         total = -1;
         $("#hitme").hide();
         $("#stay").hide();
-        writeMsgID(3);
+        newPacket(3).send();
     }
-}
-
-function canHandleMsg() {
-    var msgID = peekSize();
-    var len = getMsgSize(msgID);
-    if (data.length >= len) {
-        return true;
-    }
-    return false;
-}
-
-function getMsgSize(msgID) {
-    if (msgID == 1) {
-        return 3 + 2;
-    } else if (msgID == 2) {
-        return 3 + 4 + 2;
-    } else if (msgID == 3) {
-        return 3 + 2 + 2;
-    } else if (msgID == 4) {
-        return 3;
-    } else if (msgID == 5) {
-        return 4;
-    } else if (msgID == 10) {
-        return 3 + 4;
-    } else {
-        alert("Message ID "+String(msgID)+" does not exist.");
-    }
-    return 3;
 }
 
 function gameLoop() {

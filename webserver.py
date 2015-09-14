@@ -15,6 +15,7 @@ class Client:
         self.socket = socket
         self.pID = pID
         self.data = ""
+        self.allData = ""
         self.score = 0
         self.cards = []
         self.hostCode = ""
@@ -107,6 +108,9 @@ class Client:
         global hosts
         if len(self.data) < 3:
             return
+        if (self.data[0:3] == 'PIN'):
+            self.data = self.data[4:]
+            return
         if (self.canHandleMsg() == False):
             return
         msgID = self.readMsgID()
@@ -143,7 +147,7 @@ class Client:
                 self.becomeHost()
             else:
                 host = findHost(code)
-                if host:
+                if host and host.socket:
                     for player in host.players:
                         if player.socket == None:
                             if player.name.upper() == self.name.upper():
@@ -205,7 +209,9 @@ class Client:
         elif (msgID == 3):
             return 3
         elif (msgID == 5):
-            s = int(self.data[3:6])
+            s = 0
+            if len(self.data) >= 6:
+                s = int(self.data[3:6])
             return 3 + 3 + s
         elif (msgID == 10):
             return 3 + 4
@@ -214,20 +220,29 @@ class Client:
         return 3
 
     def recv(self):
-        data = bytearray(self.socket.recv(4096))
+        try:
+            data = bytearray(self.socket.recv(4096))
+        except:
+            self.disconnect()
         if (len(data) == 0):
-            print("Lost client.")
-            host = findHost(self.hostCode)
-            host.writeMsgID(7)
-            host.writeChars(self.pID, 2)
-            sockets.remove(self.socket)
-            clients.remove(self)
-            self.playing = False
-            self.socket = None
-            if self.myTurn:
-                nextTurn(self.hostCode)
+            self.disconnect()
             return
         self.parseData(data)
+
+    def disconnect(self):
+        print("Lost client.")
+        host = findHost(self.hostCode)
+        if (host and host.socket):
+            host.writeMsgID(7)
+            host.writeChars(self.pID, 2)
+        sockets.remove(self.socket)
+        clients.remove(self)
+        self.playing = False
+        self.socket = None
+        if self.myTurn:
+            nextTurn(self.hostCode)
+        return
+
         
     def parseData(self, data):
         global sockets
@@ -241,6 +256,8 @@ class Client:
             unmasked_data = [masked_data[i] ^ mask_key[i%4] for i in range(len(masked_data))]
             strData = bytearray(unmasked_data).decode('utf-8')
         self.data = self.data + strData
+        #self.allData = self.allData + strData
+        #print(self.name, self.allData)
         self.parseData(data[6+datalen:])
 
 def generateHostCode():
