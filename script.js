@@ -39,7 +39,7 @@ $(document).ready(function() {
         }
 
         var onclose = function() {
-            alert("Lost connection.");
+            window.location.href = '/';
         }
 
         wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);

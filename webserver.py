@@ -135,10 +135,10 @@ class Client:
         elif msgID == 3:
             # Player busted
             self.score = 0
-            nextTurn(self.hostCode)
             h = findHost(self.hostCode)
             h.writeMsgID(3)
             h.writeChars(self.pID, 2)
+            nextTurn(self.hostCode)
         elif msgID == 5:
             self.name = self.readString()
         elif msgID == 10:
