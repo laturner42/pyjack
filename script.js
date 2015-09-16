@@ -17,34 +17,7 @@ $(document).ready(function() {
     });
 
     $("#login").click( function() {
-        var onopen = function() {
-            var hostCode = $("#hostCode").val().toUpperCase();
-            if (hostCode == "0000" || hostCode.length != 4) {
-                alert("This is an invalid host code. Try again!");
-            } else {
-                var name = $("#name").val();
-                var packet = newPacket(5);
-                packet.write(name);
-                packet.send();
-                packet = newPacket(10);
-                packet.write(hostCode);
-                packet.send();
-                /*
-                writeMsgID(5);
-                writeString(name);
-                writeMsgID(10);
-                writeChars(hostCode, 4);
-                */
-            }
-        }
-
-        var onclose = function() {
-            window.location.href = '/';
-        }
-
-        wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);
-
-        $("#host").hide();
+        startConnection(); 
     } );
 
     $("#host").click( function() {
@@ -74,6 +47,31 @@ $(document).ready(function() {
 
     setInterval(gameLoop, 15);
 });
+
+function startConnection() {
+    var onopen = function() {
+        var hostCode = $("#hostCode").val().toUpperCase();
+        if (hostCode == "0000" || hostCode.length != 4) {
+            alert("This is an invalid host code. Try again!");
+        } else {
+            var name = $("#name").val();
+            var packet = newPacket(5);
+            packet.write(name);
+            packet.send();
+            packet = newPacket(10);
+            packet.write(hostCode);
+            packet.send();
+        }
+    }
+
+    var onclose = function() {
+        window.location.href = '/';
+    }
+
+    wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);
+
+    $("#host").hide();
+}
 
 function setupMessages() {
     var m1 = createMsgStruct(1, false);
