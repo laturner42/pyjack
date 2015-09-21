@@ -67,7 +67,7 @@ class MsgStruct:
         out = ''
         if (mType == "C"):
             out = self.data[0:mLen]
-        elif (mType == "C"):
+        elif (mType == "S"):
             size = int(self.data[0:mLen])
             out = self.data[mLen:mLen+size]
             mLen += size
@@ -228,16 +228,10 @@ class Socket:
 
     def disconnect(self):
         print("Lost client.")
-        host = findHost(self.hostCode)
-        if (host and host.socket):
-            host.writeMsgID(7)
-            host.writeChars(self.pID, 2)
         _sockets.remove(self.socket)
         _clients.remove(self)
         self.playing = False
         self.socket = None
-        if self.myTurn:
-            nextTurn(self.hostCode)
         return
 
 
