@@ -68,7 +68,7 @@ function startConnection() {
         window.location.href = '/';
     }
 
-    wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);
+    wsconnect("ws://localhost:8886", onopen, onclose);
 
     $("#host").hide();
 }

@@ -4,6 +4,9 @@ import base64
 import hashlib
 import select
 import random
+
+from wsserver import *
+
 from time import sleep
 from os import curdir, sep
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -14,8 +17,6 @@ class Client:
         print("Created player")
         self.socket = socket
         self.pID = pID
-        self.data = ""
-        self.allData = ""
         self.score = 0
         self.cards = []
         self.hostCode = ""
@@ -51,98 +52,46 @@ class Client:
                 return
         self.score = total
 
-    def writeMsgID(self, msgID):
-        self.writeSize(msgID)
-
-    def readMsgID(self):
-        return self.readSize()
-
-    def peekMsgID(self):
-        return int(self.data[0:3])
-
-    def peekSize(self):
-        return int(self.data[0:3])
-
-    def writeSize(self, size):
-        s = str(size)
-        while (len(s) < 3):
-            s = "0" + s
-        self.send(s)
-
-    def readSize(self):
-        s = int(self.data[0:3])
-        self.data = self.data[3:]
-        return s
-
-    def writeChars(self, chars, numChars):
-        chars = str(chars)
-        while (len(chars) < numChars):
-            chars = "0" + chars
-        self.send(chars)
-
-    def readChars(self, numChars):
-        c = self.data[0:numChars]
-        self.data = self.data[numChars:]
-        return c
-
-    def writeString(self, string):
-        l = len(string)
-        self.writeSize(l)
-        self.send(string)
-
-    def readString(self):
-        l = self.readSize()
-        s = self.data[0:l]
-        self.data = self.data[l:]
-        return s
-
-    def send(self, data):
-        length = len(data)
-        ret = bytearray([129, length])
-        for byte in data.encode("utf-8"):
-            ret.append(byte)
-        self.socket.send(ret)
-
     def handle(self):
         global pID
         global hosts
-        if len(self.data) < 3:
+        if (self.socket.canHandleMsg() == False):
             return
-        if (self.data[0:3] == 'PIN'):
-            self.data = self.data[4:]
-            return
-        if (self.canHandleMsg() == False):
-            return
-        msgID = self.readMsgID()
+        sock = self.socket
+        packet = sock.readPacket()
+        msgID = packet.msgID
         if msgID == 0:
             startGame(self.hostCode)
         elif msgID == 1:
             # Player hit
             card = nextCard(self.hostCode)
             self.addCard(card)
-            self.writeMsgID(3)
-            self.writeChars(card, 2)
-            self.writeChars(self.score, 2)
+            sock.newPacket(3)
+            sock.write(card)
+            sock.write(self.score)
+            sock.send()
 
-            h = findHost(self.hostCode)
-            h.writeMsgID(4)
-            h.writeChars(self.pID, 2)
-            h.writeChars(card, 2)
+            hsock = findHost(self.hostCode).socket
+            hsock.newPacket(14)
+            hsock.write(self.pID)
+            hsock.write(card)
+            hsock.send()
         elif msgID == 2:
             # Player stayed
-            self.score = int(self.readChars(2))
+            self.score = int(packet.read())
             nextTurn(self.hostCode)
         elif msgID == 3:
             # Player busted
             self.score = 0
-            h = findHost(self.hostCode)
-            h.writeMsgID(3)
-            h.writeChars(self.pID, 2)
+            hsock = findHost(self.hostCode).socket
+            hsock.newPacket(13)
+            hsock.write(self.pID)
+            hsock.send()
             nextTurn(self.hostCode)
         elif msgID == 5:
-            self.name = self.readString()
+            self.name = packet.read()
         elif msgID == 10:
-            code = self.readChars(4)
+            code = packet.read()
             if code == "0000":
                 self.becomeHost()
             else:
@@ -166,16 +115,19 @@ class Client:
                     print("Player has joined host", self.hostCode)
                     self.confirm()
                 else:
-                    self.writeMsgID(10)
-                    self.writeMsgID(code)
+                    sock.newPacket(10)
+                    sock.write(code)
+                    sock.send()
     
     def confirm(self):
-        host = findHost(self.hostCode)
-        self.writeMsgID(1)
-        self.writeChars(self.pID, 2)
-        host.writeMsgID(1)
-        host.writeChars(self.pID, 2)
-        host.writeString(self.name)
+        hsock = findHost(self.hostCode).socket
+        self.socket.newPacket(1)
+        self.socket.write(self.pID)
+        self.socket.send()
+        hsock.newPacket(11)
+        hsock.write(self.pID)
+        hsock.write(self.name)
+        hsock.send()
     
     def becomeHost(self):
         global hosts
@@ -189,52 +141,17 @@ class Client:
         hosts.append(self)
         self.gameStarted = False
         print("New host with host code", self.hostCode)
-        self.writeMsgID(10)
-        self.writeChars(self.hostCode, 4)
-
-    def canHandleMsg(self):
-        msgID = self.peekMsgID()
-        l = self.getMsgSize(msgID)
-        if (len(self.data) >= l):
-            return True
-        return False
-
-    def getMsgSize(self, msgID):
-        if (msgID == 0):
-            return 3
-        elif (msgID == 1):
-            return 3
-        elif (msgID == 2):
-            return 5
-        elif (msgID == 3):
-            return 3
-        elif (msgID == 5):
-            s = 0
-            if len(self.data) >= 6:
-                s = int(self.data[3:6])
-            return 3 + 3 + s
-        elif (msgID == 10):
-            return 3 + 4
-        else:
-            print("No message size for msgID", msgID)
-        return 3
-
-    def recv(self):
-        try:
-            data = bytearray(self.socket.recv(4096))
-        except:
-            self.disconnect()
-        if (len(data) == 0):
-            self.disconnect()
-            return
-        self.parseData(data)
+        self.socket.newPacket(10)
+        self.socket.write(self.hostCode)
+        self.socket.send()
 
     def disconnect(self):
         print("Lost client.")
         host = findHost(self.hostCode)
         if (host and host.socket):
-            host.writeMsgID(7)
-            host.writeChars(self.pID, 2)
+            host.socket.newPacket(17)
+            host.socket.write(self.pID)
+            host.socket.send()
         sockets.remove(self.socket)
         clients.remove(self)
         self.playing = False
@@ -242,23 +159,6 @@ class Client:
         if self.myTurn:
             nextTurn(self.hostCode)
         return
-
-        
-    def parseData(self, data):
-        global sockets
-        if (len(data) < 1):
-            return
-        strData = ''
-        datalen = (0x7f & data[1])
-        if (datalen > 0):
-            mask_key = data[2:6]
-            masked_data = data[6:(6+datalen)]
-            unmasked_data = [masked_data[i] ^ mask_key[i%4] for i in range(len(masked_data))]
-            strData = bytearray(unmasked_data).decode('utf-8')
-        self.data = self.data + strData
-        #self.allData = self.allData + strData
-        #print(self.name, self.allData)
-        self.parseData(data[6+datalen:])
 
 def generateHostCode():
     chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -268,67 +168,26 @@ def generateHostCode():
             return generateHostCode()
     return code
 
-def handle(s):
-    global pID
-    global sockets
-    global players
-    #s.setblocking(0)
-    rec = s.recv(4096).decode("utf-8").split('\n')
-    headers = {}
-    for header in rec:
-        if (": " in header):
-            app = header.split(": ")
-            headers[app[0]] = app[1]
-    
-    guid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
-    accept = ""
-    if "Sec-WebSocket-Key" in headers:
-        key = headers['Sec-WebSocket-Key'].rstrip()
-        key = bytes(key + guid, 'UTF-8')
-        key = hashlib.sha1(key).digest()
-        accept = base64.b64encode(key)
-        accept = accept.decode('UTF-8')
-
-    s.send(bytes(("" +
-    "HTTP/1.1 101 Web Socket Protocol Handshake\r\n" +
-    "Upgrade: WebSocket\r\n" +
-    "Connection: Upgrade\r\n" +
-    "WebSocket-Origin: http://localhost:8888\r\n" +
-    "WebSocket-Location: ws://localhost:9876/\r\n" +
-    "WebSocket-Protocol: sample\r\n" +
-    "Sec-WebSocket-Accept: " + str(accept) +
-    "").strip() + '\r\n\r\n', 'UTF-8'))
-
-    sockets.append(s)
-    client = Client(s, pID)
+def handle(socket):
+    global pID, clients
+    pID += 1
+    client = Client(socket, pID)
     clients.append(client)
-    return client
+
 
 def main():
     global gameStarted
     global stage
-    global window
     try:
-        server = socket.socket()
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind(('', 8886))
-        server.listen(5)
-        #server.setblocking(0)
-        print("Listening...")
+        setupMessages()
+        server = startServer()
         while True:
-            clientWaiting, _, _ = select.select([server], [], [], 0)
-            if (len(clientWaiting) > 0):
-                (clientsocket, address) = server.accept()
-                print("Accepted new client!")
-                handle(clientsocket)
-            clientsReady, _, _ = select.select(sockets, [], [], 0)
-            for client in clientsReady:
-                for c in clients:
-                    if c.socket == client:
-                        c.recv()
-            for client in clients:
-                client.handle()
+            newClient = handleNetwork()
+            if newClient:
+                print("New client!")
+                handle(newClient)
+            for player in clients:
+                player.handle()
             for host in hosts:
                 if host.gameStarted:
                     if (host.stage == 0):
@@ -336,19 +195,21 @@ def main():
                             if player.playing != True:
                                 continue
                             # Give each player their card
-                            player.writeMsgID(2)
+                            player.socket.newPacket(2)
                             card1 = nextCard(host.hostCode)
                             card2 = nextCard(host.hostCode)
                             player.addCard(card1)
                             player.addCard(card2)
-                            player.writeChars(card1, 2)
-                            player.writeChars(card2, 2)
-                            player.writeChars(player.score, 2)
+                            player.socket.write(card1)
+                            player.socket.write(card2)
+                            player.socket.write(player.score)
+                            player.socket.send()
 
-                            host.writeMsgID(2)
-                            host.writeChars(player.pID, 2)
-                            host.writeChars(card1, 2)
-                            host.writeChars(card2, 2)
+                            host.socket.newPacket(12)
+                            host.socket.write(player.pID)
+                            host.socket.write(card1)
+                            host.socket.write(card2)
+                            host.socket.send()
                         host.stage = 1
                         nextTurn(host.hostCode)
             sleep(0.01)
@@ -385,9 +246,11 @@ def nextTurn(hostCode):
     p = host.players[host.turn]
     if p.playing:
         p.myTurn = True
-        p.writeMsgID(4)
-        host.writeMsgID(5)
-        host.writeChars(p.pID, 2)
+        p.socket.newPacket(4)
+        p.socket.send()
+        host.socket.newPacket(15)
+        host.socket.write(p.pID)
+        host.socket.send()
     else:
         nextTurn(hostCode)
 
@@ -413,13 +276,15 @@ def win(hostCode):
     for player in host.players:
         if player.playing != True:
             continue
-        player.writeMsgID(5)
+        player.socket.newPacket(5)
         if player in winners:
-            player.writeChars(1, 1)
-            host.writeMsgID(6)
-            host.writeChars(player.pID, 2)
+            player.socket.write(1)
+            host.socket.newPacket(16)
+            host.socket.write(player.pID)
+            host.socket.send()
         else:
-            player.writeChars(0, 1)
+            player.socket.write(0)
+        player.socket.send()
     host.gameStarted = False
 
 def nextCard(hostNum):
@@ -427,6 +292,71 @@ def nextCard(hostNum):
     card = host.cards[host.cardNum]
     host.cardNum += 1
     return card
+
+def setupMessages():
+    m0 = createMsgStruct(0, False)
+
+    m1 = createMsgStruct(1, False)
+    
+    m2 = createMsgStruct(2, False)
+    m2.addChars(2)
+
+    m3 = createMsgStruct(3, False)
+
+    m5 = createMsgStruct(5, False)
+    m5.addString()
+
+    m10 = createMsgStruct(10, False)
+    m10.addChars(4)
+
+    c1 = createMsgStruct(1, True)
+    c1.addChars(2)
+
+    c2 = createMsgStruct(2, True)
+    c2.addChars(2)
+    c2.addChars(2)
+    c2.addChars(2)
+
+    c3 = createMsgStruct(3, True)
+    c3.addChars(2)
+    c3.addChars(2)
+
+    c4 = createMsgStruct(4, True)
+    
+    c5 = createMsgStruct(5, True)
+    c5.addChars(1)
+
+    c10 = createMsgStruct(10, True)
+    c10.addChars(4)
+
+    h1 = createMsgStruct(11, True)
+    h1.addChars(2)
+    h1.addString()
+
+    h2 = createMsgStruct(12, True)
+    h2.addChars(2)
+    h2.addChars(2)
+    h2.addChars(2)
+
+    h3 = createMsgStruct(13, True)
+    h3.addChars(2)
+
+    h4 = createMsgStruct(14, True)
+    h4.addChars(2)
+    h4.addChars(2)
+
+    h5 = createMsgStruct(15, True)
+    h5.addChars(2)
+
+    h6 = createMsgStruct(16, True)
+    h6.addChars(2)
+
+    h7 = createMsgStruct(17, True)
+    h7.addChars(2)
+
+    #h10 = createMsgStruct(10, True)
+    #h10.addChars(4)
+
 
 sockets = []
 clients = []

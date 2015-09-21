@@ -5,6 +5,17 @@ var players = [];
 
 var hostCode = "";
 
+var MSG_NEW_PLAYER = 11;
+var MSG_PLAYER_CARDS = 12;
+var MSG_PLAYER_BUST = 13;
+var MSG_PLAYER_HIT = 14;
+var MSG_NEW_TURN = 15;
+var MSG_WINNER = 16;
+var MSG_DISCONNECT = 17;
+var MSG_HOSTING = 10;
+
+var MSG_LOGIN = 10;
+
 $(document).ready(function() {
     connect();
 });
@@ -15,7 +26,7 @@ function connect() {
 
     var onopen = function() {
         $("#myHostCode").text("Waiting on host code...");
-        var packet = newPacket(10);
+        var packet = newPacket(MSG_LOGIN);
         packet.write("0000");
         packet.send();
         /*
@@ -29,39 +40,39 @@ function connect() {
         alert("Lost connection.");
     }
 
-    wsconnect("ws://preston.room409.xyz:8886", onopen, onclose);
+    wsconnect("ws://localhost:8886", onopen, onclose);
 }
 
 function setupMessages() {
-    var m1 = createMsgStruct(1, false);
+    var m1 = createMsgStruct(MSG_NEW_PLAYER, false);
     m1.addChars(2);
     m1.addString();
 
-    var m2 = createMsgStruct(2, false);
+    var m2 = createMsgStruct(MSG_PLAYER_CARDS, false);
     m2.addChars(2);
     m2.addChars(2);
     m2.addChars(2);
 
-    var m3 = createMsgStruct(3, false);
+    var m3 = createMsgStruct(MSG_PLAYER_BUST, false);
     m3.addChars(2);
 
-    var m4 = createMsgStruct(4, false);
+    var m4 = createMsgStruct(MSG_PLAYER_HIT, false);
     m4.addChars(2);
     m4.addChars(2);
 
-    var m5 = createMsgStruct(5, false);
+    var m5 = createMsgStruct(MSG_NEW_TURN, false);
     m5.addChars(2);
     
-    var m6 = createMsgStruct(6, false);
+    var m6 = createMsgStruct(MSG_WINNER, false);
     m6.addChars(2);
 
-    var m7 = createMsgStruct(7, false);
+    var m7 = createMsgStruct(MSG_DISCONNECT, false);
     m7.addChars(2);
 
-    var m10 = createMsgStruct(10, false);
+    var m10 = createMsgStruct(MSG_HOSTING, false);
     m10.addChars(4);
 
-    var o10 = createMsgStruct(10, true);
+    var o10 = createMsgStruct(MSG_LOGIN, true);
     o10.addChars(4);
 }
 
@@ -71,7 +82,7 @@ function handleNetwork() {
     }
     var packet = readPacket();
     msgID = packet.msgID;
-    if (msgID === 1) {
+    if (msgID === MSG_NEW_PLAYER) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         var name = packet.read(); //readString();
         for (var i=0; i<players.length; i++) {
@@ -94,7 +105,7 @@ function handleNetwork() {
         $("#players").append(lbl);
         players.push(newPlayer);
         renderCards();
-    } else if (msgID === 2) {
+    } else if (msgID === MSG_PLAYER_CARDS) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         var player = findPlayer(pID);
         player.cards = [];
@@ -102,18 +113,18 @@ function handleNetwork() {
         player.cards.push(packet.read()); //readChars(2));
         renderCards();
         player.label.css("color", "#999");
-    } else if (msgID == 4) {
+    } else if (msgID == MSG_PLAYER_HIT) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         var player = findPlayer(pID);
         player.cards.push(packet.read()); //readChars(2));
         renderCards();
-    } else if (msgID == 3) {
+    } else if (msgID == MSG_PLAYER_BUST) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         var player = findPlayer(pID);
         renderCards();
         player.myTurn = false;
         player.label.css("color", "red");
-    } else if (msgID == 5) {
+    } else if (msgID == MSG_NEW_TURN) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         var player = findPlayer(pID);
         for (var i=0; i<players.length; i++) {
@@ -125,7 +136,7 @@ function handleNetwork() {
         }
         player.label.css("color", "cyan");
         player.myTurn = true;
-    } else if (msgID === 6) {
+    } else if (msgID === MSG_WINNER) {
         for (var i=0; i<players.length; i++) {
             if (players[i].myTurn) {
                 players[i].label.css("color", "white");
@@ -136,7 +147,7 @@ function handleNetwork() {
         var pID = packet.readInt(); //parseInt(readChars(2));
         findPlayer(pID).label.css("color", "lime");
         renderCards(true);
-    } else if (msgID === 7) {
+    } else if (msgID === MSG_DISCONNECT) {
         var pID = packet.readInt(); //parseInt(readChars(2));
         for (var i=0; i<players.length; i++) {
             if (players[i].pID === pID) {
@@ -147,7 +158,7 @@ function handleNetwork() {
                 players[i].cards = [];
             }
         }
-    } else if (msgID === 10) {
+    } else if (msgID === MSG_HOSTING) {
         hostCode = packet.read(); //readChars(4);
         $("#myHostCode").text("Host code: "+hostCode);
     }

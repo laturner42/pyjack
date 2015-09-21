@@ -81,7 +81,7 @@ function createMsgStruct(msgID, outgoing) {
     struct.fillFromData = function() {
         var part = 1;
         var ind = 3;
-        while (part <= struct.numParts) {
+        while (part <= this.numParts) {
             var type = this.parts[part];
             var len = this.sizes[part];
             switch(type) {
@@ -110,7 +110,7 @@ function createMsgStruct(msgID, outgoing) {
             case "C":
                 var dataS = String(data);
                 if (dataS.length > len) {
-                    alert("Incorrect MSG write size: " + dataS + " | max size " + String(l));
+                    alert("Incorrect MSG write size: " + dataS + " | max size " + String(len));
                     return;
                 }
                 dataS = extend(dataS, len);
@@ -141,7 +141,7 @@ function createMsgStruct(msgID, outgoing) {
         return this;
     }
 
-    struct.addString = function(numChars) {
+    struct.addString = function() {
         this.numParts += 1;
         this.parts[this.numParts] = "S";
         this.sizes[this.numParts] = 3;
